@@ -1,0 +1,105 @@
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/repos/azure-repos-git
+trigger: none
+
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/build/variables
+variables:
+  - name: BuildContainerImage
+    value: davidullrich/azurepipelineagent:latest
+  - name: SolutionFile
+    value: ./src/Demo-TestContainers.sln
+  - name: TestProjects
+    value: "**/*.Tests.csproj"
+
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/agents/hosted
+pool:
+  name: Self-hosted
+
+container:
+  image: $(BuildContainerImage)
+
+steps:
+  - checkout: self
+    displayName: "Checkout repository"
+
+  # Use .NET 8.x
+  - task: UseDotNet@2
+    displayName: "Use .NET 8.x"
+    inputs:
+      packageType: sdk
+      version: 8.x
+
+  # Install docker cli
+  # https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/docker-installer-v0
+  # https://github.com/docker/cli/tags
+  - task: DockerInstaller@0
+    displayName: "Install docker cli"
+    inputs:
+      dockerVersion: 26.1.0
+
+  # Dotnet restore
+  # https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/dotnet-core-cli-v2
+  - task: DotNetCoreCLI@2
+    displayName: "Dotnet restore"
+    inputs:
+      command: restore
+      feedsToUse: select
+      includeNuGetOrg: true
+      projects: $(SolutionFile)
+
+  # Dotnet build
+  - task: DotNetCoreCLI@2
+    displayName: "Dotnet build"
+    inputs:
+      command: build
+      projects: $(SolutionFile)
+      arguments: "--configuration Release"
+
+  # Docker compose up
+  # https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/docker-compose-v0
+  - task: DockerCompose@0
+    displayName: "Docker compose up"
+    inputs:
+      containerregistrytype: Container Registry
+      dockerComposeFile: "./docker/docker-compose.yml"
+      action: Run a Docker Compose command
+      dockerComposeCommand: "up -d"
+      projectName: "orderapp"
+
+  # Prepair containers
+  - task: CmdLine@2
+    displayName: "Prepair containers"
+    inputs:
+      workingDirectory: "./docker"
+      script: |
+
+        echo -e "Connect database to build agent network $(Agent.ContainerNetwork) ...\n"
+        docker network connect $(Agent.ContainerNetwork) order-mariadb
+
+        echo -e "Waiting for container to be healthy ...\n"
+
+        until [ "$(docker inspect -f '{{.State.Health.Status}}' order-mariadb)" == "healthy" ]; do
+          sleep 1
+        done
+
+        docker ps
+
+  # Dotnet test
+  - task: DotNetCoreCLI@2
+    displayName: "Dotnet test"
+    inputs:
+      command: test
+      projects: $(TestProjects)
+      testRunTitle: "Database integration tests"
+      arguments: "--settings ./src/ci-tests.runsettings"
+
+  # Docker compose down
+  - task: DockerCompose@0
+    displayName: "Docker compose down"
+    condition: always()
+    inputs:
+      containerregistrytype: Container Registry
+      dockerComposeFile: "./docker/docker-compose.yml"
+      currentWorkingDirectory: "./docker"
+      action: Run a Docker Compose command
+      dockerComposeCommand: "down -v"
+      projectName: "orderapp"
