@@ -1,0 +1,11 @@
+﻿<RunSettings>
+  <RunConfiguration>
+      <EnvironmentVariables>
+          <DB_SERVER>localhost</DB_SERVER>
+          <DB_PORT>9001</DB_PORT>
+          <DB_NAME>mysql</DB_NAME>
+          <DB_USER>root</DB_USER>
+          <DB_PASSWORD>some-password</DB_PASSWORD>
+      </EnvironmentVariables>
+  </RunConfiguration>
+</RunSettings>

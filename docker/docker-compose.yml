@@ -1,0 +1,53 @@
+name: "orderapp"
+
+services:
+  # Database
+  order-mariadb:
+    image: mariadb:11.3
+    container_name: order-mariadb
+    restart: unless-stopped
+    healthcheck:
+      interval: 3s
+      retries: 3
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--su-mysql",
+          "--connect",
+          "--innodb_initialized",
+        ]
+      timeout: 30s
+    ports:
+      - "9001:3306"
+    volumes:
+      - order-mariadb:/var/lib/mysql
+      - ./initdb:/docker-entrypoint-initdb.d
+    networks:
+      - order-net
+    environment:
+      MYSQL_ROOT_PASSWORD: "some-password"
+      MYSQL_DATABASE: "orders"
+      MYSQL_USER: "orders"
+      MYSQL_PASSWORD: "another-password"
+
+  # PhpMyAdmin
+  order-pma:
+    image: phpmyadmin
+    container_name: order-pma
+    restart: unless-stopped
+    ports:
+      - "9002:80"
+    networks:
+      - order-net
+    environment:
+      PMA_HOST: "order-mariadb"
+      PMA_USER: "root"
+      PMA_PASSWORD: "some-password"
+
+networks:
+  order-net:
+
+volumes:
+  order-mariadb:
+  order-redis:
