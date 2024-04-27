@@ -1,0 +1,72 @@
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/repos/azure-repos-git
+trigger: none
+
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/build/variables
+variables:
+  - name: BuildContainerImage
+    value: davidullrich/azurepipelineagent:latest
+  - name: SolutionFile
+    value: ./src/Demo-TestContainers.sln
+  - name: TestProjects
+    value: "**/*.Tests.csproj"
+
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/agents/hosted
+pool:
+  name: Self-hosted
+
+container:
+  image: $(BuildContainerImage)
+
+# https://learn.microsoft.com/en-us/azure/devops/pipelines/process/service-containers
+resources:
+  containers:
+    - container: order-mariadb
+      image: mariadb:11.3
+      ports:
+        - 3306:3306
+      env:
+        MYSQL_ROOT_PASSWORD: "some-password"
+        MYSQL_DATABASE: "orders"
+        MYSQL_USER: "orders"
+        MYSQL_PASSWORD: "another-password"
+
+services:
+  order-mariadb: order-mariadb
+
+steps:
+  - checkout: self
+    displayName: "Checkout repository"
+
+  # Use .NET 8.x
+  - task: UseDotNet@2
+    displayName: "Use .NET 8.x"
+    inputs:
+      packageType: sdk
+      version: 8.x
+
+  # Dotnet restore
+  # https://learn.microsoft.com/en-us/azure/devops/pipelines/tasks/reference/dotnet-core-cli-v2
+  - task: DotNetCoreCLI@2
+    displayName: "Dotnet restore"
+    inputs:
+      command: restore
+      feedsToUse: select
+      includeNuGetOrg: true
+      projects: $(SolutionFile)
+
+  # Dotnet build
+  - task: DotNetCoreCLI@2
+    displayName: "Dotnet build"
+    inputs:
+      command: build
+      projects: $(SolutionFile)
+      arguments: "--configuration Release"
+
+  # Dotnet test
+  - task: DotNetCoreCLI@2
+    displayName: "Dotnet test"
+    inputs:
+      command: test
+      projects: $(TestProjects)
+      testRunTitle: "Database integration tests"
+      arguments: "--settings ./src/ci-tests.runsettings"
