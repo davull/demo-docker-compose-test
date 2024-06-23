@@ -1,0 +1,3 @@
+{
+    "dotnet.unitTests.runSettingsPath": ".\\src\\Demo-TestContainers.Tests\\test.runsettings"
+}
