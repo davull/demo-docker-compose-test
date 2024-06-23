@@ -50,4 +50,3 @@ networks:
 
 volumes:
   order-mariadb:
-  order-redis:
